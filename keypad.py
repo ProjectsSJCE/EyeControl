@@ -9,7 +9,7 @@ class MyFrame(wx.Frame):
         self.keyboard_control = PyKeyboard()
         
         #place to store what is being entered
-        self.text = wx.TextCtrl(self.panel, 10, "Data", size=wx.DLG_SZE(self, 500, 20))
+        self.text = wx.TextCtrl(self.panel, 10, "", size=wx.DLG_SZE(self, 500, 20))
         self.outer_box = wx.BoxSizer(wx.VERTICAL)
         self.outer_box.Add(self.text, border=5, flag=wx.ALL)
         
@@ -27,6 +27,10 @@ class MyFrame(wx.Frame):
             self.key_buttons.append(b)
             self.Bind(wx.EVT_BUTTON, self.connect_keys, b)
             self.hash[i] = key
+            if key == "space":
+                self.hash[i] = " "
+            elif key == "enter":
+                self.hash[i] = "\n"
             i += 1
          
         i = 0
