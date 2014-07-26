@@ -8,10 +8,14 @@ import cv2
 import numpy as np
 import scipy.optimize as so
 import pymouse
+import threading
+import thread
+import math
 
 CALIB_WINDOW = 'CALIBRATION WINDOW'
 PUPIL_WINDOW = 'PUPIL_WINDOW'
 PUPIL_THRESH_WINDOW = 'PUPIL_THRESH_WINDOW'
+cam_index = 0
 
 # instantiate objects
 ESC = u'\x1b'
@@ -25,6 +29,14 @@ WHITE = (255, 255, 255)
 GREEN = (0, 255, 0)
 RED = (0, 0, 255)
 YELLOW = (30, 255, 255)
+CALIBRATION_WAIT_TIME = 3 #1000
+GAZE_TIME = 1
+INIT_POINT = None
+GAZE_RADIUS = 100
+GAZE_ITER = 0
+is_GAZE = True
+
+mouse = pymouse.PyMouse()
 
 START_SAVING_POINT = 'START_SAVING_POINT'
 STOP_SAVING_POINT = 'STOP_SAVING_POINT'
@@ -58,12 +70,56 @@ def model(X, a0, a1, a2, a3, a4, a5):
 
     return a0 + a1 * x + a2 * y + a3 * x * y + a4 * x ** 2 + a5 * y ** 2
 
+class SelfTimer(threading.Thread):
+
+    def __init__(self, time, point):
+    
+        threading.Thread.__init__(self)
+        self.stop_time = time
+        self.point = point
+        
+    def run(self):
+    
+        global is_GAZE
+        i = 1
+        while is_GAZE:
+            i += 1
+#            time.sleep(1)
+            if i == self.stop_time:
+                mouse.click(point, 1)
+                is_GAZE = False
+                break
+
+    def restart(self, point):
+    
+        self.point = point
+        self.__init__(self.stop_time, self.point)
+        self.run()
+
+timer_thread = SelfTimer(GAZE_TIME, INIT_POINT)
+
 def moveMouse(mouse, point):
+
+    global INIT_POINT, GAZE_ITER, GAZE_RADIUS
     x1, y1 = mouse.position()
     x2, y2 = point
     # print x1, y1, x2, y2
     x_distance = float(x2 - x1)
     y_distance = float(y2 - y1)
+    if INIT_POINT is None:
+        INIT_POINT = x1, y1
+    init_x_distance = float(x2 - INIT_POINT[0])
+    init_y_distance = float(y2 - INIT_POINT[1])    
+    distance_moved = (math.sqrt(init_x_distance ** 2 + init_y_distance ** 2))
+    if distance_moved < GAZE_RADIUS:       
+        GAZE_ITER += 1
+    else:
+        INIT_POINT = None
+        GAZE_ITER = 0
+    if GAZE_ITER > 1:
+        is_GAZE = True
+        timer_thread.restart(INIT_POINT)        
+    
     intervals = 10
     delay = 0.2
     for r in range(0, intervals):
@@ -76,7 +132,7 @@ def moveMouse(mouse, point):
 # This function shows the calibration Screen in order to record 
 # the vision range with respect to the eye video frame
 def showCalibrationScreen(screen_width, screen_height, calib_pipe, calib_queue):
-    cv2.namedWindow(CALIB_WINDOW, cv2.WND_PROP_FULLSCREEN)
+    cv2.namedWindow(CALIB_WINDOW)#, cv2.WND_PROP_FULLSCREEN)
     cv2.setWindowProperty(CALIB_WINDOW, cv2.WND_PROP_FULLSCREEN, cv2.cv.CV_WINDOW_FULLSCREEN)
 
     shape = screen_height, screen_width, 3
@@ -98,7 +154,7 @@ def showCalibrationScreen(screen_width, screen_height, calib_pipe, calib_queue):
     # 1. centre
     sx, sy = screen_width / 2, screen_height / 2 
     draw_circle(calib, sx, sy, CIRCLE_RADIUS, WHITE, RED)
-    cv2.waitKey(1000)
+    cv2.waitKey(CALIBRATION_WAIT_TIME)
     calib_pipe.send(START_SAVING_POINT)
     calib_points[1] = CalibPoint(sx, sy)
     save_calib_points(sx, sy, calib_queue, calib_points[1])
@@ -108,7 +164,7 @@ def showCalibrationScreen(screen_width, screen_height, calib_pipe, calib_queue):
     # 2. up
     sx, sy = screen_width / 2, CIRCLE_RADIUS + CIRCLE_PADDING
     draw_circle(calib, sx, sy, CIRCLE_RADIUS, WHITE, RED)
-    cv2.waitKey(1000)
+    cv2.waitKey(CALIBRATION_WAIT_TIME)
     calib_pipe.send(START_SAVING_POINT)
     calib_points[2] = CalibPoint(sx, sy)
     save_calib_points(sx, sy, calib_queue, calib_points[2])
@@ -118,7 +174,7 @@ def showCalibrationScreen(screen_width, screen_height, calib_pipe, calib_queue):
     # 3. bottom
     sx, sy = screen_width / 2, screen_height - CIRCLE_RADIUS - CIRCLE_PADDING
     draw_circle(calib, sx, sy, CIRCLE_RADIUS, WHITE, RED)
-    cv2.waitKey(1000)
+    cv2.waitKey(CALIBRATION_WAIT_TIME)
     calib_pipe.send(START_SAVING_POINT)
     calib_points[3] = CalibPoint(sx, sy)
     save_calib_points(sx, sy, calib_queue, calib_points[3])
@@ -128,7 +184,7 @@ def showCalibrationScreen(screen_width, screen_height, calib_pipe, calib_queue):
     # 4. left
     sx, sy = CIRCLE_RADIUS + CIRCLE_PADDING, screen_height / 2
     draw_circle(calib, sx, sy, CIRCLE_RADIUS, WHITE, RED)
-    cv2.waitKey(1000)
+    cv2.waitKey(CALIBRATION_WAIT_TIME)
     calib_pipe.send(START_SAVING_POINT)
     calib_points[4] = CalibPoint(sx, sy)
     save_calib_points(sx, sy, calib_queue, calib_points[4])
@@ -138,7 +194,7 @@ def showCalibrationScreen(screen_width, screen_height, calib_pipe, calib_queue):
     # 5. right
     sx, sy = screen_width - CIRCLE_RADIUS - CIRCLE_PADDING, screen_height / 2
     draw_circle(calib, sx, sy, CIRCLE_RADIUS, WHITE, RED)
-    cv2.waitKey(1000)
+    cv2.waitKey(CALIBRATION_WAIT_TIME)
     calib_pipe.send(START_SAVING_POINT)
     calib_points[5] = CalibPoint(sx, sy)
     save_calib_points(sx, sy, calib_queue, calib_points[5])
@@ -158,7 +214,7 @@ def showCalibrationScreen(screen_width, screen_height, calib_pipe, calib_queue):
     # 7. upper right
     sx, sy = screen_width - CIRCLE_RADIUS - CIRCLE_PADDING, CIRCLE_RADIUS + CIRCLE_PADDING
     draw_circle(calib, sx, sy, CIRCLE_RADIUS, WHITE, RED)
-    cv2.waitKey(1000)
+    cv2.waitKey(CALIBRATION_WAIT_TIME)
     calib_pipe.send(START_SAVING_POINT)
     calib_points[7] = CalibPoint(sx, sy)
     save_calib_points(sx, sy, calib_queue, calib_points[7])
@@ -168,7 +224,7 @@ def showCalibrationScreen(screen_width, screen_height, calib_pipe, calib_queue):
     # 8. lower left
     sx, sy = CIRCLE_RADIUS + CIRCLE_PADDING, screen_height - CIRCLE_RADIUS - CIRCLE_PADDING
     draw_circle(calib, sx, sy, CIRCLE_RADIUS, WHITE, RED)
-    cv2.waitKey(1000)
+    cv2.waitKey(CALIBRATION_WAIT_TIME)
     calib_pipe.send(START_SAVING_POINT)
     calib_points[8] = CalibPoint(sx, sy)
     save_calib_points(sx, sy, calib_queue, calib_points[8])
@@ -178,7 +234,7 @@ def showCalibrationScreen(screen_width, screen_height, calib_pipe, calib_queue):
     # 9. lower right
     sx, sy = screen_width - CIRCLE_RADIUS - CIRCLE_PADDING, screen_height - CIRCLE_RADIUS - CIRCLE_PADDING
     draw_circle(calib, sx, sy, CIRCLE_RADIUS, WHITE, RED)
-    cv2.waitKey(1000)
+    cv2.waitKey(CALIBRATION_WAIT_TIME)
     calib_pipe.send(START_SAVING_POINT)
     calib_points[9] = CalibPoint(sx, sy)
     save_calib_points(sx, sy, calib_queue, calib_points[9])
@@ -188,7 +244,7 @@ def showCalibrationScreen(screen_width, screen_height, calib_pipe, calib_queue):
     # 10. centre
     sx, sy = screen_width / 2, screen_height / 2
     draw_circle(calib, sx, sy, CIRCLE_RADIUS, WHITE, RED)
-    cv2.waitKey(1000)
+    cv2.waitKey(CALIBRATION_WAIT_TIME)
     calib_pipe.send(START_SAVING_POINT)
     calib_points[10] = CalibPoint(sx, sy)
     save_calib_points(sx, sy, calib_queue, calib_points[10])
@@ -290,7 +346,7 @@ if __name__ == '__main__':
     main module for detecting the pupil
     '''
     # instantiate a mouse object
-    mouse = pymouse.PyMouse()
+#    mouse = pymouse.PyMouse()
 
     screen_width, screen_height = mouse.screen_size()
     screen_rect = (0, 0, screen_width, screen_height)
@@ -307,7 +363,7 @@ if __name__ == '__main__':
     is_valid_process_done = False
     err_rms = 1
 
-    cam = cv2.VideoCapture(0)
+    cam = cv2.VideoCapture(cam_index)
 
     while True:
         try:
@@ -417,7 +473,7 @@ if __name__ == '__main__':
                 valid_process = mp.Process(target=validate,
                     args=(screen_width, screen_height, calib_pipe, calib_queue, a, b))
                 valid_process.start()
-
+            is_calib_process_done = True
             if main_pipe.poll():
                 data_recv = main_pipe.recv()
                 if type(data_recv) == str:
@@ -441,16 +497,17 @@ if __name__ == '__main__':
                 while not calib_queue.empty():
                     calib_queue.get()
 
-            if is_calib_process_done and is_valid_process_done and err_rms <= 0.5:
+            if True:#is_calib_process_done and is_valid_process_done and err_rms <= 0.5:
                 x, y = ellipse_centre
-                x = normalize(x, FRAME_WIDTH)
-                y = normalize(y, FRAME_HEIGHT)
-                sx, sy = mapPoint(x, y, a, b)
-                sx = denormalize(sx, screen_width)
-                sy = denormalize(sy, screen_height)
-                # print sx, sy
+#                x = normalize(x, FRAME_WIDTH)
+#                y = normalize(y, FRAME_HEIGHT)
+#                sx, sy = mapPoint(x, y, a, b)
+#                sx = denormalize(sx, screen_width)
+#                sy = denormalize(sy, screen_height)
+#                # print sx, sy
 
-                moveMouse(mouse, (sx, sy))
+#                moveMouse(mouse, (sx, sy)) #(x, y))
+                moveMouse(mouse, (x, y))
         except:
             print "Unexpected error:", sys.exc_info()[0]
             raise
