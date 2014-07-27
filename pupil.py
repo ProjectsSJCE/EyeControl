@@ -8,9 +8,8 @@ import cv2
 import numpy as np
 import scipy.optimize as so
 import pymouse
-import threading
-import thread
 import math
+from datetime import datetime
 
 CALIB_WINDOW = 'CALIBRATION WINDOW'
 PUPIL_WINDOW = 'PUPIL_WINDOW'
@@ -29,12 +28,12 @@ WHITE = (255, 255, 255)
 GREEN = (0, 255, 0)
 RED = (0, 0, 255)
 YELLOW = (30, 255, 255)
+
 CALIBRATION_WAIT_TIME = 3 #1000
 GAZE_TIME = 1
 INIT_POINT = None
 GAZE_RADIUS = 100
-GAZE_ITER = 0
-is_GAZE = True
+BASE_TIME = datetime.now()
 
 mouse = pymouse.PyMouse()
 
@@ -70,56 +69,29 @@ def model(X, a0, a1, a2, a3, a4, a5):
 
     return a0 + a1 * x + a2 * y + a3 * x * y + a4 * x ** 2 + a5 * y ** 2
 
-class SelfTimer(threading.Thread):
-
-    def __init__(self, time, point):
-    
-        threading.Thread.__init__(self)
-        self.stop_time = time
-        self.point = point
-        
-    def run(self):
-    
-        global is_GAZE
-        i = 1
-        while is_GAZE:
-            i += 1
-#            time.sleep(1)
-            if i == self.stop_time:
-                mouse.click(point, 1)
-                is_GAZE = False
-                break
-
-    def restart(self, point):
-    
-        self.point = point
-        self.__init__(self.stop_time, self.point)
-        self.run()
-
-timer_thread = SelfTimer(GAZE_TIME, INIT_POINT)
-
 def moveMouse(mouse, point):
 
-    global INIT_POINT, GAZE_ITER, GAZE_RADIUS
+    global INIT_POINT, GAZE_RADIUS, BASE_TIME
     x1, y1 = mouse.position()
+    elapsed_time = (datetime.now() - BASE_TIME).seconds
     x2, y2 = point
     # print x1, y1, x2, y2
     x_distance = float(x2 - x1)
     y_distance = float(y2 - y1)
     if INIT_POINT is None:
         INIT_POINT = x1, y1
+    
     init_x_distance = float(x2 - INIT_POINT[0])
     init_y_distance = float(y2 - INIT_POINT[1])    
     distance_moved = (math.sqrt(init_x_distance ** 2 + init_y_distance ** 2))
-    if distance_moved < GAZE_RADIUS:       
-        GAZE_ITER += 1
-    else:
-        INIT_POINT = None
-        GAZE_ITER = 0
-    if GAZE_ITER > 1:
-        is_GAZE = True
-        timer_thread.restart(INIT_POINT)        
     
+    if distance_moved < GAZE_RADIUS:
+        if elapsed_time >= GAZE_TIME:
+            mouse.click(INIT_POINT[0], INIT_POINT[1], 1)            
+    else:
+        INIT_POINT = x1, y1
+        BASE_TIME = datetime.now()
+            
     intervals = 10
     delay = 0.2
     for r in range(0, intervals):
