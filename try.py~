@@ -39,8 +39,8 @@ class SelfTimer(threading.Thread):
         while is_GAZE:
             print i
             if i == self.stop_time:
-#                print "click"
-                mouse.click(self.x, self.y, 1)
+                print "click"
+#                mouse.click(self.x, self.y, 1)
                 is_GAZE = False
                 break
             i += 1
@@ -72,8 +72,8 @@ def run(timer_pipe):
                     x, y = data
                 if i == GAZE_TIME:
                     print x, y, "Fro click"
-#                    print "click"
-                    mouse.click(x, y, 1)
+                    print "click"
+#                    mouse.click(x, y, 1)
                     print "I clicked"
                     is_GAZE = False
                     break

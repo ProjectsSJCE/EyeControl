@@ -58,7 +58,6 @@ class MyFrame(wx.Frame):
         
         self.main_pipe_time, self.timer_pipe = mp.Pipe()
         self.main_pipe_colour, self.colour_pipe = mp.Pipe()
-        
         mp.Process(target=colour_timer, args=(self.timer_pipe, self.colour_pipe)).start()
         
         #place to store what is being entered
@@ -70,8 +69,11 @@ class MyFrame(wx.Frame):
         
         #place to make the actual keyboard
         self.keyboard = wx.BoxSizer(wx.VERTICAL)
-        self.keys = [chr(ord('a') + i) for i in range(26)]
+        self.keys = [chr(ord('a') + i) for i in range(10)]
         self.keys.append('space')
+#        chr(ord('a')) + i
+        for i in range(10,26):
+            self.keys.append(chr(ord('a') + i))
         #self.keys.append('enter')
         
         i = 1
@@ -114,76 +116,95 @@ class MyFrame(wx.Frame):
             k += 1       
 #        print "done"        
 #        self.init_keys()
+#        button.Bind(wx.EVT_BUTTON, self.connect_keys)
+        print "overwritten"
         self.keyboard.AddSpacer(40)
         self.keyboard.Add(self.keybox[j])
         self.outer_box.Add(self.keyboard, border=5, flag=wx.ALL)    
         self.panel.SetSizer(self.outer_box)  
         
-    def change_colour(self, event):
+    def change_colour(self, event_change_colour):
         
         global MOUSE_HOVER
-        i = event.GetId()
+        i = event_change_colour.GetId()
         self.colour_changed = i
         button = self.hash[i]
-
+        print "enter ",self.colour_changed
 #        print "entered"
-        button.Bind(wx.EVT_BUTTON, self.connect_keys)#add key to the textbox
         button.SetBackgroundColour('red')
+#        button.Bind(wx.EVT_BUTTON, self.connect_keys)#add key to the textbox
 #        wx.CallLater(20, self.change_colour, event)
 #        self.main_pipe_time.send(True)
 #        colour = self.main_pipe_colour.recv()
 #        print colour
 #        button.SetBackgroundColour(colour)
-                
-    def revert_colour(self, event):
+        return
+        
+    def revert_colour(self, event_revert_colour):
         
 #        print "left"
         global MOUSE_HOVER
         MOUSE_HOVER = False
+        print "left ", self.colour_changed
 #        self.main_pipe_time.send(False)
         button = self.hash[self.colour_changed]
         button.SetBackgroundColour('lightgrey')
-        
+        button.Bind(wx.EVT_BUTTON, self.connect_keys)
+        return
         
     def init_keys(self):
     
 #        for k in self.hash_label.keys():
 #            button = self.hash[k]
         for button in self.key_buttons:
-            print "simulating"
+#                print "simulating"
             event = wx.PyCommandEvent(wx.EVT_BUTTON.typeId, button.GetId())
-            event = wx.PyCommandEvent(wx.EVT_BUTTON.typeId, event.GetId())
             wx.PostEvent(button, event)
+        return
         
-    def connect_keys(self, event):
+    def connect_keys(self, event_connect_keys):
         
-        i = event.GetId()
+        i = event_connect_keys.GetId()
+        self.colour_changed = i
+#        self.colour_changed = i
+        print "clicked ", i        
+#        self.colour_changed = i
         label = self.hash_label[i]
-#        if label == "space":
-#            label = " "
-#        else:
-#            label = "\n"
+        button = self.hash[i]
+#        if init[0] == 0:
+#        if True:
+#           if label == "space":
+#                label = " "
+#           else:
+#                label = "\n"
         self.keyboard_control.type_string(label)
         self.initial_text = self.text.GetValue()
         self.text.SetValue(self.initial_text + label)
-#        print "pressed"
-        self.colour_changed = i
-        button = self.hash[i]
-        button.SetBackgroundColour('red')
-#        print init[0]
-#        if init[0] == 1:
+#           print "pressed"
+#            self.colour_changed = i
+#            button.SetBackgroundColour('red')
+#            print init[0]
+#        else:
 #            print "came here binded"
-#        button.Bind(wx.EVT_ENTER_WINDOW, self.change_colour)
+        button.Bind(wx.EVT_ENTER_WINDOW, self.change_colour)
         button.Bind(wx.EVT_LEAVE_WINDOW, self.revert_colour)
-#            if button.GetId() == len(self.key_buttons):
-#                init[0] = 0
-#            return    
+#        if button.GetId() == len(self.key_buttons):
+#            init[0] = 0
+        return    
     
     def update_text(self, letter):
         
         initial_text = self.text.GetValue()
         self.text.SetValue(initial_text + letter)
 
+    def dummy(self, event_dummy):
+    
+        print "howdy"
+        i = event_dummy.GetId()
+        label = self.hash_label[i]
+        button = self.hash[i]
+        button.Bind(wx.EVT_ENTER_WINDOW, self.change_colour)
+        button.Bind(wx.EVT_LEAVE_WINDOW, self.revert_colour)
                         
 class MyApp (wx.App) :
     
