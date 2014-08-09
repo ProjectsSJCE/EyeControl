@@ -10,6 +10,8 @@ import scipy.optimize as so
 import pymouse
 import math
 from datetime import datetime
+import wx
+from pykeyboard import PyKeyboard
 
 CALIB_WINDOW = 'CALIBRATION WINDOW'
 PUPIL_WINDOW = 'PUPIL_WINDOW'
@@ -29,10 +31,10 @@ GREEN = (0, 255, 0)
 RED = (0, 0, 255)
 YELLOW = (30, 255, 255)
 
-CALIBRATION_WAIT_TIME = 3 #1000
-GAZE_TIME = 1
+CALIBRATION_WAIT_TIME = 1000
+GAZE_TIME = 5
 INIT_POINT = None
-GAZE_RADIUS = 100
+GAZE_RADIUS = 50 #Where each unit is approx. the length of a pixel diagonal of the screen
 BASE_TIME = datetime.now()
 
 mouse = pymouse.PyMouse()
@@ -72,17 +74,22 @@ def model(X, a0, a1, a2, a3, a4, a5):
 def moveMouse(mouse, point):
 
     global INIT_POINT, GAZE_RADIUS, BASE_TIME
+    
     x1, y1 = mouse.position()
     elapsed_time = (datetime.now() - BASE_TIME).seconds
     x2, y2 = point
     # print x1, y1, x2, y2
     x_distance = float(x2 - x1)
     y_distance = float(y2 - y1)
+    
     if INIT_POINT is None:
         INIT_POINT = x1, y1
     
+    #we first calculate how much the mouse has moved from the initial point
     init_x_distance = float(x2 - INIT_POINT[0])
     init_y_distance = float(y2 - INIT_POINT[1])    
+    
+    #we are interested in determining if the mouse lies inside a circle of GAZE_RADIUS for GAZE_TIME
     distance_moved = (math.sqrt(init_x_distance ** 2 + init_y_distance ** 2))
     
     if distance_moved < GAZE_RADIUS:
@@ -91,7 +98,8 @@ def moveMouse(mouse, point):
     else:
         INIT_POINT = x1, y1
         BASE_TIME = datetime.now()
-            
+        #Since the mouse has moved away from that cirlce, we keep a new base time and repeat the process
+        
     intervals = 10
     delay = 0.2
     for r in range(0, intervals):
@@ -313,6 +321,95 @@ def validate(screen_width, screen_height, calib_pipe, calib_queue, a, b):
     calib_pipe.send(float(err_rms))
     calib_pipe.send(VALIDATION_DONE)
 
+class MyFrame(wx.Frame):
+    
+    def __init__(self):
+        wx.Frame.__init__(self, None, wx.ID_ANY, 'EYE Typing Keypad', pos=(0, 0), size=wx.DisplaySize())
+        self.panel = wx.Panel(self)
+        self.keyboard_control = PyKeyboard()
+        
+        #place to store what is being entered
+        font1 = wx.Font(10, wx.FONTFAMILY_MODERN, wx.NORMAL, wx.BOLD)   
+        self.text = wx.TextCtrl(self.panel, 30, "", size=wx.DLG_SZE(self, 500, 40))
+        self.text.SetFont(font1) 
+        self.outer_box = wx.BoxSizer(wx.VERTICAL)
+        self.outer_box.Add(self.text, border=5, flag=wx.ALL)
+        characters = ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'space', 'p', 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'z', 'x', 'c', 'v', 'b', 'n', 'm']
+        #place to make the actual keyboard
+        self.keyboard = wx.BoxSizer(wx.VERTICAL)
+        self.keys = []
+        for i in range(2):
+            self.keys.append(characters[i])
+#        self.keys.append('space')
+        for i in range(2,26):
+            self.keys.append(characters[i])
+        #self.keys.append('enter')
+        
+        i = 1
+        self.hash = {}
+        self.key_buttons = []
+        for key in self.keys:
+            b = wx.Button(self.panel, i, key, size=wx.DLG_SZE(self, 50, 50))
+            self.key_buttons.append(b)
+            self.Bind(wx.EVT_BUTTON, self.connect_keys, b)
+            self.hash[i] = key
+            if key == "space":
+                self.hash[i] = '__' 
+            #elif key == "enter":
+               # self.hash[i] = "_"
+            i += 1
+         
+        i = 0
+        j = 0
+        self.keybox = []
+        font = wx.Font(20, wx.FONTFAMILY_MODERN, wx.NORMAL, wx.BOLD)      
+        
+        for button in self.key_buttons:
+            if i % 7 == 0:
+                if self.keybox != []:
+                    self.keyboard.AddSpacer(40)
+                    self.keyboard.Add(self.keybox[j])
+                    j += 1
+                self.keybox.append(wx.BoxSizer(wx.HORIZONTAL))
+
+            button.SetFont(font)  
+            self.keybox[j].Add(button)
+            self.keybox[j].AddSpacer(40)
+            i += 1       
+        
+        self.keyboard.AddSpacer(40)
+        self.keyboard.Add(self.keybox[j])
+        self.outer_box.Add(self.keyboard, border=5, flag=wx.ALL)    
+        self.panel.SetSizer(self.outer_box)    
+        
+    def connect_keys(self, event):
+        
+        i = event.GetId()
+        label = self.hash[i]
+#        if label == "space":
+#            label = " "
+#        else:
+#            label = "\n"
+        self.keyboard_control.type_string(label)
+        self.update_text(label)
+        
+    def update_text(self, letter):
+        
+        initial_text = self.text.GetValue()
+        self.text.SetValue(initial_text + letter)
+        
+class MyApp (wx.App) :
+    
+    def OnInit (self) :
+        frame = MyFrame()
+        frame.Show(True)
+        return True
+        
+def test () :
+    app_our = MyApp(0)
+    app_our.MainLoop()
+
+
 if __name__ == '__main__':
     '''
     main module for detecting the pupil
@@ -445,7 +542,11 @@ if __name__ == '__main__':
                 valid_process = mp.Process(target=validate,
                     args=(screen_width, screen_height, calib_pipe, calib_queue, a, b))
                 valid_process.start()
-            is_calib_process_done = True
+                is_calib_process_done = True
+            
+            elif key == u'K' and is_calib_process_done:
+                mp.Process(target=test).start()
+            
             if main_pipe.poll():
                 data_recv = main_pipe.recv()
                 if type(data_recv) == str:
@@ -469,17 +570,17 @@ if __name__ == '__main__':
                 while not calib_queue.empty():
                     calib_queue.get()
 
-            if True:#is_calib_process_done and is_valid_process_done and err_rms <= 0.5:
+            if is_calib_process_done and is_valid_process_done and err_rms <= 0.5:
                 x, y = ellipse_centre
-#                x = normalize(x, FRAME_WIDTH)
-#                y = normalize(y, FRAME_HEIGHT)
-#                sx, sy = mapPoint(x, y, a, b)
-#                sx = denormalize(sx, screen_width)
-#                sy = denormalize(sy, screen_height)
-#                # print sx, sy
+                x = normalize(x, FRAME_WIDTH)
+                y = normalize(y, FRAME_HEIGHT)
+                sx, sy = mapPoint(x, y, a, b)
+                sx = denormalize(sx, screen_width)
+                sy = denormalize(sy, screen_height)
+                # print sx, sy
 
-#                moveMouse(mouse, (sx, sy)) #(x, y))
-                moveMouse(mouse, (x, y))
+                moveMouse(mouse, (sx, sy))
+#                moveMouse(mouse, (x, y))
         except:
             print "Unexpected error:", sys.exc_info()[0]
             raise
