@@ -329,41 +329,41 @@ class MyFrame(wx.Frame):
         self.keyboard_control = PyKeyboard()
         
         #place to store what is being entered
-        font1 = wx.Font(10, wx.FONTFAMILY_MODERN, wx.NORMAL, wx.BOLD)   
+        font1 = wx.Font(10, wx.FONTFAMILY_MODERN, wx.NORMAL, wx.BOLD)
         self.text = wx.TextCtrl(self.panel, 30, "", size=wx.DLG_SZE(self, 500, 40))
-        self.text.SetFont(font1) 
+        self.text.SetFont(font1)
         self.outer_box = wx.BoxSizer(wx.VERTICAL)
         self.outer_box.Add(self.text, border=5, flag=wx.ALL)
-        characters = ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'space', 'p', 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'z', 'x', 'c', 'v', 'b', 'n', 'm']
+        
         #place to make the actual keyboard
         self.keyboard = wx.BoxSizer(wx.VERTICAL)
-        self.keys = []
-        for i in range(2):
-            self.keys.append(characters[i])
-#        self.keys.append('space')
-        for i in range(2,26):
-            self.keys.append(characters[i])
-        #self.keys.append('enter')
+        self.keys = [chr(ord('a') + i) for i in range(10)]
+        self.keys.append('space')
+
+#        chr(ord('a')) + i
+        self.keys = ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'space', 'p', 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'z', 'x', 'c', 'v', 'b', 'n', 'm']
         
         i = 1
         self.hash = {}
+        self.hash_label = {}
         self.key_buttons = []
         for key in self.keys:
             b = wx.Button(self.panel, i, key, size=wx.DLG_SZE(self, 50, 50))
             self.key_buttons.append(b)
             self.Bind(wx.EVT_BUTTON, self.connect_keys, b)
-            self.hash[i] = key
+            self.hash_label[i] = key
+            self.hash[i] = b
             if key == "space":
-                self.hash[i] = '__' 
-            #elif key == "enter":
-               # self.hash[i] = "_"
+                self.hash_label[i] = 'spc'
             i += 1
-         
+
         i = 0
         j = 0
         self.keybox = []
-        font = wx.Font(20, wx.FONTFAMILY_MODERN, wx.NORMAL, wx.BOLD)      
+        font = wx.Font(20, wx.FONTFAMILY_MODERN, wx.NORMAL, wx.BOLD)
         
+        k = 1
+        self.flag = [False] * 28
         for button in self.key_buttons:
             if i % 7 == 0:
                 if self.keybox != []:
@@ -371,33 +371,65 @@ class MyFrame(wx.Frame):
                     self.keyboard.Add(self.keybox[j])
                     j += 1
                 self.keybox.append(wx.BoxSizer(wx.HORIZONTAL))
-
-            button.SetFont(font)  
+            button.Bind(wx.EVT_ENTER_WINDOW, self.change_colour)
+            button.Bind(wx.EVT_LEAVE_WINDOW, self.revert_colour)
+            button.SetFont(font)
             self.keybox[j].Add(button)
             self.keybox[j].AddSpacer(40)
-            i += 1       
-        
+            i += 1
+            k += 1       
+
         self.keyboard.AddSpacer(40)
         self.keyboard.Add(self.keybox[j])
         self.outer_box.Add(self.keyboard, border=5, flag=wx.ALL)    
-        self.panel.SetSizer(self.outer_box)    
+        self.panel.SetSizer(self.outer_box)
         
-    def connect_keys(self, event):
+    def change_colour(self, event_change_colour):
         
-        i = event.GetId()
-        label = self.hash[i]
-#        if label == "space":
-#            label = " "
-#        else:
-#            label = "\n"
-        self.keyboard_control.type_string(label)
-        self.update_text(label)
+        global GAZE_RADIUS
+        i = event_change_colour.GetId()
+        self.colour_changed = i
+        button = self.hash[i]
+        self.flag[i] = True
+        button.SetBackgroundColour('red')
+        if self.flag[i] is True:
+            wx.CallLater(int((GAZE_RADIUS/3)*1000), self.colour_change, i, "yellow")
         
+    def colour_change(self, i, colour):
+        
+        button = self.hash[i]
+        if self.flag[i] is True:
+            button.SetBackgroundColour(colour)
+            if self.flag[i] is True:
+                wx.CallLater(int((GAZE_RADIUS/3)*1000), self.connect_keys, i)
+        
+    def revert_colour(self, event_revert_colour):
+        
+        i = self.colour_changed
+        self.flag[i] = False
+        button = self.hash[self.colour_changed]
+        button.SetBackgroundColour('lightgrey')
+
+    def connect_keys(self, i):
+        
+        self.colour_changed = i
+        label = self.hash_label[i]
+        button = self.hash[i]
+        if label == "spc":
+                label = "__"
+        if self.flag[i] is True:
+            button.SetBackgroundColour("green")
+        if self.flag[i] is True:
+            self.keyboard_control.type_string(label)
+            self.initial_text = self.text.GetValue()
+            self.text.SetValue(self.initial_text + label)
+        return    
+    
     def update_text(self, letter):
         
         initial_text = self.text.GetValue()
         self.text.SetValue(initial_text + letter)
-        
+
 class MyApp (wx.App) :
     
     def OnInit (self) :
@@ -408,7 +440,6 @@ class MyApp (wx.App) :
 def test () :
     app_our = MyApp(0)
     app_our.MainLoop()
-
 
 if __name__ == '__main__':
     '''
@@ -544,7 +575,7 @@ if __name__ == '__main__':
                 valid_process.start()
                 is_calib_process_done = True
             
-            elif key == u'K' and is_calib_process_done:
+            elif key == u'K':# and is_calib_process_done:
                 mp.Process(target=test).start()
             
             if main_pipe.poll():
@@ -577,7 +608,7 @@ if __name__ == '__main__':
                 sx, sy = mapPoint(x, y, a, b)
                 sx = denormalize(sx, screen_width)
                 sy = denormalize(sy, screen_height)
-                # print sx, sy
+#                 print sx, sy
 
                 moveMouse(mouse, (sx, sy))
 #                moveMouse(mouse, (x, y))
