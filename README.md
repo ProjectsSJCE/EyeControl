@@ -1,7 +1,7 @@
 EyeControl
 ==========
 
-  This project is used to control the movement of the mouse with the eye. It requires an IR camera to be placed at a certain position relative to the eye for it to work.
+  This project is to allow a paralyzed person use a computer by relying on his/her pupil movements. An IR camera is used to capture the movements of the pupil and map it to the movements of the mouse cursor.
   
 Instructions to run:
 ====================
