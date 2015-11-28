@@ -1,4 +1,4 @@
-EyeControl
+PupilPC
 ==========
 
   This project is to allow a paralyzed person use a computer by relying on his/her pupil movements. An IR camera is used to capture the movements of the pupil and map it to the movements of the mouse cursor.
